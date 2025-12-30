@@ -1,0 +1,25 @@
+{% extends "common/page.html" %}
+
+{% block headers %}
+<script src="/static/host.js" type="module"></script>
+
+{% endblock %}
+
+{% block body %}
+
+<div id="message" class="warning"> </div>
+
+<div class="admin-buttons">
+    <button id="reset">Reset Buzzer</button>
+    <button id="toggle-lock">Toggle Lock</button>
+    <br>Audio:<input id="audio" type="checkbox">
+
+</div>
+
+<p style="margin: 10px;"><i>You can also press space to buzz.</i></p>
+<hr style="border-bottom: 0px;">
+<ol id="buzzed-users">
+    <p>Loading...</p>
+</ol>
+
+{% endblock %}

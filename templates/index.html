@@ -1,0 +1,24 @@
+{% extends "common/page.html" %}
+
+{% block headers %}
+
+<script>
+
+</script>
+
+{% endblock %}
+
+{% block body %}
+
+<h1>Hello!</h1>
+<p>To create a buzzer room, please use the Petting a Buzzer discord bot.</p>
+<p>You can add it to your own user <a href="https://discord.com/oauth2/authorize?client_id=1453003957269041316">by
+                clicking here.</a></p>
+<p>Once added, you can type "/buzzer create" in any discord channel. Make sure your server has the <b>Use External
+                Apps</b> permission enabled for you, if not, other users will not be able to see or click the button
+        that allows
+        them to join.</p>
+
+<button onclick="buzz()">Buzz sound</button>
+Audio:<input id="audio" type="checkbox">
+{% endblock %}

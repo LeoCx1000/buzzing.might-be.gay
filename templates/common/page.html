@@ -1,0 +1,22 @@
+<!doctype html>
+
+<head>
+    {% block default_headers %}
+    <link rel="stylesheet" href="/static/style.css">
+    {% endblock %}
+
+    {% block headers %}
+    {% endblock %}
+</head>
+
+<body>
+
+    <div class="contents">
+        {% block body %}
+        <section>
+            {{content}}
+        </section>
+        {% endblock %}
+    </div>
+
+</body>

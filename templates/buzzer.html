@@ -1,0 +1,22 @@
+{% extends "common/page.html" %}
+
+{% block headers %}
+<script src="/static/buzz.js" type="module"></script>
+
+{% endblock %}
+
+{% block body %}
+
+<div id="message" class="warning"> </div>
+
+<p>
+    <button class="buzzer" id="buzz">BUZZ</button>
+</p>
+<p style="margin: 10px;"><i>You can also press space to buzz.</i></p>
+<button id="leave">Leave</button> - Audio:<input id="audio" type="checkbox">
+<hr style="border-bottom: 0px;">
+<ol id="buzzed-users">
+    <p>Loading...</p>
+</ol>
+
+{% endblock %}
