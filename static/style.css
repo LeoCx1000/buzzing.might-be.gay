@@ -86,3 +86,9 @@ li[class="unbuzzed"] {
 li[class="unbuzzed"]::marker {
     content: "X. ";
 }
+
+footer {
+    position: absolute;
+    bottom: 0px;
+    font-size: x-small;
+}
