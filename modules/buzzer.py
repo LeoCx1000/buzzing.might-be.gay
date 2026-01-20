@@ -20,6 +20,8 @@ async def listen_for_buzzes(socket: PlayerConnection) -> None:
                     socket.leaving = True
                     await socket.close(code=1013, reason="You left.")
                     break
+                if msg["event"] == "PONG":
+                    socket.received_rtt_pong(msg["id"])
 
     else:
         print("No Party.")

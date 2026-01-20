@@ -13,6 +13,6 @@ yeah... just that. https://buzzing.might-be.gay (soon to be released)
   - [ ] add penalty
 - [ ] teams
 - [ ] lock room (no more players)
-- [ ] `/buzzer recover: [room]` for recovering the join button (for all current players)
+- [x] `/buzzer recover: [room]` for recovering the join button (for all current players)
 - [ ] delete/end room (also after 15 minute host timeout)
 - [ ] Track points and track boards

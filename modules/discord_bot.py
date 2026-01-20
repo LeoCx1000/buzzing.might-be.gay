@@ -41,6 +41,18 @@ buzzer_cmd = app_commands.Group(
 client.tree.add_command(buzzer_cmd)
 
 
+class Join(discord.ui.View):
+    def __init__(self, url: str):
+        super().__init__(timeout=1)
+        self.add_item(
+            discord.ui.Button(
+                style=discord.ButtonStyle.link,
+                label="Join Buzzer",
+                url=url,
+            )
+        )
+
+
 class JoinRoomView(discord.ui.View):
     def __init__(self, owner: discord.abc.User, party: Party, board_name: str | None):
         super().__init__(timeout=None)
@@ -54,8 +66,9 @@ class JoinRoomView(discord.ui.View):
         self.owner = owner
         self.board_name = board_name
         self.party = party
+        self.last_bump = discord.utils.utcnow()
 
-    @discord.ui.button(label="Join", style=discord.ButtonStyle.blurple)
+    @discord.ui.button(label="Join", style=discord.ButtonStyle.green)
     async def join_game(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
@@ -63,12 +76,28 @@ class JoinRoomView(discord.ui.View):
         codes = [c for c, u in self.party.users.items() if u.id == interaction.user.id]
         code = codes[0] if codes else token_urlsafe(16)
         self.party.users[code] = interaction.user
-        await interaction.response.send_message(
-            f"{interaction.user.mention} join the buzzer here:"
-            f"\n<{BASE_URL}/buzzer/{self.party.id}?user={code}>"
-            "\n## DO NOT share this link with anyone.\nEach participant must click join individually.",
-            ephemeral=True,
+        url = f"{BASE_URL}/buzzer/{self.party.id}?user={code}"
+        embed = discord.Embed(
+            description="## DO NOT share this link with anyone."
+            "\nEach participant must click join individually."
         )
+        await interaction.response.send_message(embed=embed, view=Join(url))
+
+    @discord.ui.button(
+        emoji="\N{DOWNWARDS BLACK ARROW}\N{VARIATION SELECTOR-16}",
+        style=discord.ButtonStyle.blurple,
+    )
+    async def resend(self, interaction: discord.Interaction, _: discord.ui.Button):
+        now = discord.utils.utcnow()
+        if (now - self.last_bump).total_seconds() < 15:
+            return await interaction.response.send_message(
+                "This can be done once every 15 seconds", ephemeral=True
+            )
+        self.last_bump = now
+
+        await interaction.response.defer()
+        await interaction.delete_original_response()
+        await interaction.followup.send(view=self, embed=self.embed)
 
 
 @buzzer_cmd.command(name="create")

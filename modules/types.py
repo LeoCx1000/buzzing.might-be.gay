@@ -123,7 +123,8 @@ class Party:
         await self.update_buzzers()
 
     def player_buzz(self, socket: PlayerConnection):
-        time = monotonic() - socket.rtt
+        print("buzz: RTT", socket.rtt)
+        time = monotonic() - min(socket.rtt, 1)
         if not socket.buzzed and not self.locked:
             socket.buzzed = True
             socket.buzzed_at = time
