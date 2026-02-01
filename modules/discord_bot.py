@@ -108,7 +108,7 @@ class JoinRoomView(discord.ui.View):
 async def buzzer_create(interaction: discord.Interaction, board_name: str | None):
     """Creates a new buzzer session."""
     room_id = token_urlsafe(6)
-    client.app.state.parties[room_id] = party = Party(room_id)
+    client.app.state.parties[room_id] = party = Party(room_id, client.app)
     view = JoinRoomView(owner=interaction.user, party=party, board_name=board_name)
     await interaction.response.send_message(view=view, embed=view.embed)
 

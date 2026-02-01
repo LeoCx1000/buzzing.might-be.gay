@@ -11,12 +11,6 @@ from modules.types import Party
 from modules.buzzer import buzzer_router
 from modules.host import host_router
 
-# TODO list:
-# - Management panel
-# - Buzzer locking
-# - Buzz sound
-# - Discord link gen bot
-
 
 @get("/favicon.ico")
 async def favicon() -> None:
@@ -49,6 +43,5 @@ app = Litestar(
         engine=JinjaTemplateEngine,
     ),
     openapi_config=None,
-    debug=True,
 )
 app.state.parties = {}

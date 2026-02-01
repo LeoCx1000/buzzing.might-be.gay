@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections import deque
 from contextlib import asynccontextmanager
 from secrets import token_urlsafe
@@ -6,9 +7,9 @@ from statistics import mean
 from time import monotonic
 
 import discord
-from litestar import WebSocket as BaseWebSocket
-from litestar.exceptions import WebSocketDisconnect, WebSocketException
+from litestar import WebSocket as BaseWebSocket, Litestar
 from litestar import status_codes
+from litestar.exceptions import WebSocketDisconnect, WebSocketException
 
 
 class CrossConnectionData:
@@ -69,7 +70,8 @@ class PlayerConnection(BaseWebSocket):
 
 
 class Party:
-    def __init__(self, party_id: str):
+    def __init__(self, party_id: str, app: Litestar):
+        self.app = app
         self.id = party_id
         self.connections: dict[str, PlayerConnection] = {}
         self.lost_connections: dict[str, PlayerConnection] = {}
@@ -79,6 +81,7 @@ class Party:
         self.host_ws: BaseWebSocket | None = None
         self.available_choices: list[str] | None = None
         self.show_choices: bool = False
+        self.lost_host_timeout_task: asyncio.Task | None = None
 
     async def broadcast_to_players(self, message: dict):
         for con in self.connections.values():
@@ -226,6 +229,18 @@ class Party:
             if task:
                 task.cancel()
 
+    async def lost_host_connection(self):
+        await asyncio.sleep(300)
+
+        self.app.state.parties.pop(self.id, None)
+
+        for conn in self.connections.values():
+            try:
+                await conn.close()
+            except Exception:
+                logging.info("Could not close connection")
+                pass
+
     @asynccontextmanager
     async def host_connection(self, conn: BaseWebSocket):
         await conn.accept()
@@ -234,14 +249,18 @@ class Party:
                 await self.host_ws.close()
             except WebSocketException:
                 pass
+        if self.lost_host_timeout_task:
+            self.lost_host_timeout_task.cancel()
+            self.lost_host_timeout_task = None
+
         try:
             self.host_ws = conn
 
             payload = self.base_user_update_payload(choices=True)
             await conn.send_json(payload)
-
             yield
         except WebSocketDisconnect:
+            self.lost_host_timeout_task = asyncio.create_task(
+                self.lost_host_connection()
+            )
             pass
-        finally:
-            self.host_ws = conn
