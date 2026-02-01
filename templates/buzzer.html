@@ -9,6 +9,13 @@
 
 <div id="message" class="warning"> </div>
 
+<div class="formOverlay hidden" id="multipleChoicePopup">
+    <div class="formBackdrop">
+        <div id="multipleChoiceForm">
+        </div>
+    </div>
+</div>
+
 <p>
     <button class="buzzer" id="buzz">BUZZ</button>
 </p>
@@ -18,6 +25,8 @@
 <ol id="buzzed-users">
     <p>Loading...</p>
 </ol>
+
+<p id="selfChoice"></p>
 
 {% endblock %}
 

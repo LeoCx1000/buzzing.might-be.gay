@@ -12,8 +12,8 @@
 <div class="admin-buttons">
     <button id="reset">Reset Buzzer</button>
     <button id="toggle-lock">Toggle Lock</button>
-    <br>Audio:<input id="audio" type="checkbox">
-
+    <br><span style="background-color: darkslategrey; padding: 2px;">Audio:<input id="audio" type="checkbox"
+            checked></span>
 </div>
 
 <p style="margin: 10px;"><i>You can also press space to buzz.</i></p>
@@ -21,5 +21,14 @@
 <ol id="buzzed-users">
     <p>Loading...</p>
 </ol>
+
+<div>
+    <form id="promptForm">
+        <textarea form="promptForm" cols="30" id="prompts" name="prompts"></textarea><br>
+        <button id="clearChoices">clear</button>
+        <input type="submit" value="submit">
+        <button id="earlyEndMC">End Choices</button>
+    </form>
+</div>
 
 {% endblock %}

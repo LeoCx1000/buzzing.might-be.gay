@@ -79,9 +79,12 @@ class JoinRoomView(discord.ui.View):
         url = f"{BASE_URL}/buzzer/{self.party.id}?user={code}"
         embed = discord.Embed(
             description="## DO NOT share this link with anyone."
-            "\nEach participant must click join individually."
+            "\nEach participant must click join individually.",
+            colour=discord.Colour.yellow(),
         )
-        await interaction.response.send_message(embed=embed, view=Join(url))
+        await interaction.response.send_message(
+            embed=embed, view=Join(url), ephemeral=True
+        )
 
     @discord.ui.button(
         emoji="\N{DOWNWARDS BLACK ARROW}\N{VARIATION SELECTOR-16}",

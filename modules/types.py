@@ -11,25 +11,28 @@ from litestar.exceptions import WebSocketDisconnect, WebSocketException
 from litestar import status_codes
 
 
-class PlayerConnection(BaseWebSocket):
-    _discord_user: discord.abc.User
+class CrossConnectionData:
+    def __init__(self, user_id: str) -> None:
+        self.user_id = user_id
+        self.buzzed: bool = False
+        self.buzzed_at: float = 0.0
+        self.leaving: bool = False
+        self.discord_user: discord.abc.User
+        self.choice: str | None = None
 
+
+class PlayerConnection(BaseWebSocket):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.rtt_times: deque[float] = deque(maxlen=30)
         self._rtt: float = 0.0
         self.sent_times: dict[str, float] = {}
+
         user_id = self.cookies.get("user")
         if not user_id:
             raise WebSocketException(detail="Unknown User")
-        self.user_id = user_id
-        self.buzzed: bool = False
-        self.buzzed_at: float = 0.0
-        self.leaving: bool = False
 
-    @property
-    def user(self):
-        return self._discord_user
+        self.game_data = CrossConnectionData(user_id)
 
     @property
     def rtt(self) -> float:
@@ -74,6 +77,8 @@ class Party:
         self.locked: bool = False
         self.host: str | None = None
         self.host_ws: BaseWebSocket | None = None
+        self.available_choices: list[str] | None = None
+        self.show_choices: bool = False
 
     async def broadcast_to_players(self, message: dict):
         for con in self.connections.values():
@@ -81,63 +86,111 @@ class Party:
         if self.host_ws:
             asyncio.create_task(self.host_ws.send_json(message))
 
-    def base_user_update_payload(self, sound: bool = False):
+    def base_user_update_payload(self, sound: bool = False, choices: bool = False):
         return {
             "event": "UPDATE",
             "sound": sound,
             "users": [
                 {
-                    "name": c.user.display_name,
-                    "avatar": c.user.display_avatar.url,
-                    "buzzed": c.buzzed,
+                    "name": c.game_data.discord_user.display_name,
+                    "avatar": c.game_data.discord_user.display_avatar.url,
+                    "buzzed": c.game_data.buzzed,
+                    "connected": c.connection_state != "disconnect",
+                    "choice": c.game_data.choice if choices else None,
                 }
                 for c in sorted(
-                    [*self.connections.values(), *self.lost_connections.values()],
-                    key=lambda c: (c.buzzed_at == 0.0, c.buzzed_at),
+                    self.all_connections,
+                    key=lambda c: (c.game_data.buzzed_at == 0.0, c.game_data.buzzed_at),
                 )
-                if not c.leaving
+                if not c.game_data.leaving
             ],
             "t": monotonic(),
             "button_state": "LOCKED" if self.locked else "OPEN",
         }
 
     async def update_buzzers(self, sound: bool = False):
-        payload = self.base_user_update_payload(sound=sound)
+        payload = self.base_user_update_payload(sound=sound, choices=self.show_choices)
 
         if self.host_ws:
-            asyncio.create_task(self.host_ws.send_json(payload))
+            asyncio.create_task(
+                self.host_ws.send_json(
+                    self.base_user_update_payload(sound=sound, choices=True)
+                )
+            )
 
         for conn in self.connections.values():
             if not self.locked:
-                payload["button_state"] = "BUZZED" if conn.buzzed else "OPEN"
+                payload["button_state"] = "BUZZED" if conn.game_data.buzzed else "OPEN"
+
+            if self.available_choices and not conn.game_data.choice:
+                payload["choices"] = self.available_choices
+            payload["choice"] = conn.game_data.choice
 
             try:
                 await conn.send_json(payload)
             except WebSocketException:
                 pass
 
+    @property
+    def all_connections(self):
+        return [*self.connections.values(), *self.lost_connections.values()]
+
     async def reset_buzzers(self):
-        for conn in [*self.connections.values(), *self.lost_connections.values()]:
-            conn.buzzed = False
-            conn.buzzed_at = 0.0
+        for conn in self.all_connections:
+            conn.game_data.buzzed = False
+            conn.game_data.buzzed_at = 0.0
         await self.update_buzzers()
 
     def player_buzz(self, socket: PlayerConnection):
         print("buzz: RTT", socket.rtt)
         time = monotonic() - min(socket.rtt, 1)
-        if not socket.buzzed and not self.locked:
-            socket.buzzed = True
-            socket.buzzed_at = time
+        if not socket.game_data.buzzed and not self.locked:
+            socket.game_data.buzzed = True
+            socket.game_data.buzzed_at = time
             asyncio.create_task(self.update_buzzers(sound=True))
+
+    async def prompt_multiple_choice(self, choices: list[str]):
+        self.available_choices = choices
+        self.locked = True
+        self.show_choices = False
+
+        for conn in self.all_connections:
+            conn.game_data.choice = None
+
+        await self.update_buzzers()
+        await self.broadcast_to_players(
+            {"event": "MULTIPLE_CHOICE", "choices": choices}
+        )
+
+    async def received_mc_answer(self, socket: PlayerConnection, choice: str):
+        if not self.available_choices:
+            return
+        if socket.game_data.choice in self.available_choices:
+            return
+        if choice not in self.available_choices:
+            return
+        socket.game_data.choice = choice
+        if all(
+            c.game_data.choice in self.available_choices
+            for c in self.connections.values()
+        ):
+            self.show_choices = True
+        await self.update_buzzers()
+
+    async def end_multiple_choice(self):
+        self.show_choices = True
+        self.available_choices = None
+        await self.broadcast_to_players({"event": "END_MULTIPLE_CHOICE"})
+        await self.update_buzzers()
 
     @asynccontextmanager
     async def connection(self, conn: PlayerConnection):
-        conn._discord_user = self.users[conn.user_id]
+        conn.game_data.discord_user = self.users[conn.game_data.user_id]
         await conn.accept()
         task = None
 
         try:
-            previous_conn = self.connections.pop(conn.user_id, None)
+            previous_conn = self.connections.pop(conn.game_data.user_id, None)
             if previous_conn:
                 asyncio.create_task(
                     previous_conn.close(
@@ -145,18 +198,18 @@ class Party:
                         reason="Connected from another location.",
                     )
                 )
+                conn.game_data = previous_conn.game_data
 
-            self.connections[conn.user_id] = conn
+            self.connections[conn.game_data.user_id] = conn
 
             # Restrore previous state
-            old_connection = self.lost_connections.pop(conn.user_id, None)
+            old_connection = self.lost_connections.pop(conn.game_data.user_id, None)
             if old_connection:
-                conn.buzzed = old_connection.buzzed
-                conn.buzzed_at = old_connection.buzzed_at
+                conn.game_data = old_connection.game_data
 
             payload = self.base_user_update_payload()
             if not self.locked:
-                payload["button_state"] = "BUZZED" if conn.buzzed else "OPEN"
+                payload["button_state"] = "BUZZED" if conn.game_data.buzzed else "OPEN"
 
             await conn.send_json(payload)
             task = asyncio.create_task(conn.send_rtt_pings())
@@ -164,10 +217,10 @@ class Party:
         except WebSocketDisconnect:
             pass
         finally:
-            self.connections.pop(conn.user_id, None)
-            self.lost_connections[conn.user_id] = conn
+            self.connections.pop(conn.game_data.user_id, None)
+            self.lost_connections[conn.game_data.user_id] = conn
 
-            if conn.leaving:
+            if conn.game_data.leaving:
                 await self.update_buzzers()
 
             if task:
@@ -184,7 +237,7 @@ class Party:
         try:
             self.host_ws = conn
 
-            payload = self.base_user_update_payload()
+            payload = self.base_user_update_payload(choices=True)
             await conn.send_json(payload)
 
             yield

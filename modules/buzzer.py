@@ -5,6 +5,8 @@ from litestar.response import Redirect, Template
 
 from modules.types import Party, PlayerConnection
 
+import logging
+
 
 @websocket("/ws", websocket_class=PlayerConnection)
 async def listen_for_buzzes(socket: PlayerConnection) -> None:
@@ -12,17 +14,28 @@ async def listen_for_buzzes(socket: PlayerConnection) -> None:
     if party:
         async with party.connection(socket):
             await party.update_buzzers()
-            while not socket.leaving:
+            while not socket.game_data.leaving:
                 msg = await socket.receive_json()
-                if msg["event"] == "BUZZ":
-                    party.player_buzz(socket)
-                if msg["event"] == "LEAVE":
-                    socket.leaving = True
-                    await socket.close(code=1013, reason="You left.")
-                    break
-                if msg["event"] == "PONG":
-                    socket.received_rtt_pong(msg["id"])
 
+                try:
+                    if "event" not in msg:
+                        print("Unknown ws message received")
+                        continue
+                    elif msg["event"] == "BUZZ":
+                        party.player_buzz(socket)
+                    elif msg["event"] == "LEAVE":
+                        socket.game_data.leaving = True
+                        await socket.close(code=1013, reason="You left.")
+                        break
+                    elif msg["event"] == "PONG":
+                        socket.received_rtt_pong(msg.get("id"))
+                    elif msg["event"] == "MC_ANSWER":
+                        await party.received_mc_answer(
+                            socket, msg.get("answer").strip()
+                        )
+                except Exception as e:
+                    logging.error("Failed handling websocket message", exc_info=e)
+                    continue
     else:
         print("No Party.")
         raise HTTPException(status_code=400, detail="idiot")

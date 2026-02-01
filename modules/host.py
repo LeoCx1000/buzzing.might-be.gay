@@ -18,7 +18,18 @@ async def host_config_ws(socket: PlayerConnection) -> None:
                 elif msg["event"] == "TOGGLE_LOCK":
                     party.locked = not party.locked
                     await party.update_buzzers()
-
+                elif msg["event"] == "PROMPT_CHOICES":
+                    await party.prompt_multiple_choice(
+                        [m.strip() for m in msg["choices"].strip().splitlines()]
+                    )
+                elif msg["event"] == "CLEAR_MC":
+                    party.available_choices = None
+                    party.show_choices = False
+                    for c in party.all_connections:
+                        c.game_data.choice = None
+                    await party.update_buzzers()
+                elif msg["event"] == "END_MC":
+                    await party.end_multiple_choice()
     else:
         print("No Party.")
         raise HTTPException(status_code=400, detail="No Party")

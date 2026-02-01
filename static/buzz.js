@@ -1,7 +1,7 @@
 const proto = location.protocol === "https:" ? "wss" : "ws";
 const buzzer_ws = new WebSocket(`${proto}://${location.host}/buzzer/ws`);
 
-const btn = document.getElementById("buzz");
+const buzzer_button = document.getElementById("buzz");
 const message_box = document.getElementById("message");
 
 buzzer_ws.onclose = (e) => {
@@ -36,17 +36,33 @@ function buzz() {
 
 const send = (event, data = {}) => (buzzer_ws.send(JSON.stringify({ "event": event, ...data })))
 
-var state = "OPEN";
+var buzzer_state = "OPEN";
 
 buzzer_ws.onmessage = (e) => {
     const msg = JSON.parse(e.data)
 
+    console.log("WS Receive", msg)
     switch (msg.event) {
         case "UPDATE":
             updateBuzzers(msg.users);
             updatebtn(msg.button_state);
             if (msg.sound)
                 buzz()
+            if (msg.choice) {
+                console.log(msg.choice)
+                console.log(typeof msg.choice)
+                document.getElementById("selfChoice").innerText = `Your Choice: ${msg.choice}`
+            } else {
+                document.getElementById("selfChoice").innerText = ""
+            }
+            if (!msg.choices) {
+                document.getElementById("selfChoice").innerText = "";
+                break;
+            }
+            if (msg.choice)
+                break
+        case "MULTIPLE_CHOICE":
+            promptMultipleChoice(msg.choices)
             break;
         case "RESET":
             updateBuzzers([]);
@@ -55,50 +71,64 @@ buzzer_ws.onmessage = (e) => {
         case "PING":
             send("PONG", { "id": msg.id })
             break;
+        case "END_MULTIPLE_CHOICE":
+            endMultipleChoice();
+            break;
     }
 }
 
-const updatebtn = (newState) => {
-    if (newState)
-        state = newState;
+function promptMultipleChoice(choices) {
+    updatebtn("LOCKED")
+    const form = document.getElementById("multipleChoiceForm")
+    form.innerHTML = ""
+    for (const elem of choices) {
+        const btn = document.createElement("button")
+        btn.classList.add("multipleChoiceBtn")
+        btn.innerText = elem
+        form.appendChild(btn)
+    }
+    document.getElementById("multipleChoicePopup").classList.remove("hidden")
+    const body = document.getElementById("body")
+    if (!body.classList.contains("noscroll"))
+        body.classList.add("noscroll")
+}
 
-    switch (state) {
+function endMultipleChoice() {
+    const popup = document.getElementById("multipleChoicePopup")
+    if (!popup.classList.contains("hidden"))
+        popup.classList.add("hidden")
+    document.getElementById("body").classList.remove("noscroll")
+
+}
+
+function updatebtn(newState) {
+    if (newState)
+        buzzer_state = newState;
+
+    switch (buzzer_state) {
         case "OPEN":
-            btn.style.borderColor = "green";
-            btn.style.backgroundColor = "lightgreen";
-            btn.innerHTML = "BUZZ";
+            buzzer_button.style.borderColor = "green";
+            buzzer_button.style.backgroundColor = "lightgreen";
+            buzzer_button.innerHTML = "BUZZ";
 
             break;
         case "BUZZED":
-            btn.style.borderColor = "red";
-            btn.style.backgroundColor = "lightcoral";
-            btn.innerHTML = "BUZZED";
+            buzzer_button.style.borderColor = "red";
+            buzzer_button.style.backgroundColor = "lightcoral";
+            buzzer_button.innerHTML = "BUZZED";
             break;
         case "LOCKED":
-            btn.style.borderColor = "yellow";
-            btn.style.backgroundColor = "lightyellow";
-            btn.innerHTML = "LOCKED";
+            buzzer_button.style.borderColor = "yellow";
+            buzzer_button.style.backgroundColor = "lightyellow";
+            buzzer_button.innerHTML = "LOCKED";
             break;
         case "DISCONNECT":
-            btn.style.borderColor = "yellow";
-            btn.style.backgroundColor = "lightyellow";
-            btn.innerHTML = "LOST CONN";
+            buzzer_button.style.borderColor = "yellow";
+            buzzer_button.style.backgroundColor = "lightyellow";
+            buzzer_button.innerHTML = "LOST CONN";
             break;
     }
 }
-
-btn.onclick = () => {
-    if (state == "OPEN") {
-        send("BUZZ")
-        updatebtn("BUZZED")
-    }
-}
-
-document.body.addEventListener("keydown", function (e) {
-    if (e.key == ' ') {
-        btn.onclick()
-    }
-});
 
 
 function updateBuzzers(users) {
@@ -112,7 +142,7 @@ function updateBuzzers(users) {
             li.innerHTML = `
                 <div class="username">
                     <img class="avatar" src="${user.avatar}?size=32"/>
-                    <span class="displayname">${user.name}</span>
+                    <span class="displayname">${user.name}${user.choice ? " (" + user.choice + ")" : ""}</span>
                 </div>`
             list.appendChild(li);
         }
@@ -122,9 +152,35 @@ function updateBuzzers(users) {
     }
 }
 
-const leaveBtn = document.getElementById("leave")
-leaveBtn.onclick = () => {
+document.getElementById("leave").onclick = () => {
     if (confirm("Leave game?")) {
         send("LEAVE")
+    }
+}
+
+document.body.addEventListener("keydown", function (e) {
+    if (e.key == ' ') {
+        buzzer_button.onclick()
+    }
+});
+
+document.getElementById("multipleChoiceForm").onsubmit = (e) => {
+    e.preventDefault();
+    console.log(e)
+}
+
+document.addEventListener('click', async (e) => {
+    if (e.target.matches('button') && e.target.classList.contains('multipleChoiceBtn')) {
+        console.log("clock")
+        document.getElementById("selfChoice").innerText = `Your Choice: ${e.target.innerText}`
+        send("MC_ANSWER", { "answer": e.target.innerText })
+        endMultipleChoice()
+    }
+});
+
+buzzer_button.onclick = () => {
+    if (buzzer_state == "OPEN") {
+        send("BUZZ")
+        updatebtn("BUZZED")
     }
 }
