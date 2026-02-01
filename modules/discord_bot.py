@@ -91,12 +91,8 @@ class JoinRoomView(discord.ui.View):
         style=discord.ButtonStyle.blurple,
     )
     async def resend(self, interaction: discord.Interaction, _: discord.ui.Button):
-        now = discord.utils.utcnow()
-        if (now - self.last_bump).total_seconds() < 15:
-            return await interaction.response.send_message(
-                "This can be done once every 15 seconds", ephemeral=True
-            )
-        self.last_bump = now
+        if interaction.user != self.owner:
+            return await interaction.response.defer()
 
         await interaction.response.defer()
         await interaction.delete_original_response()
