@@ -11,11 +11,16 @@ import logging
 @websocket("/ws", websocket_class=PlayerConnection)
 async def listen_for_buzzes(socket: PlayerConnection) -> None:
     party: Party = socket.app.state.parties.get(socket.cookies.get("party", ""), None)
+    logging.info("%s %s", party, socket.game_data.user_id)
     if party:
         async with party.connection(socket):
             await party.update_buzzers()
             while not socket.game_data.leaving:
                 msg = await socket.receive_json()
+
+                if socket != party.connections[socket.game_data.user_id]:
+                    await socket.close(code=1013, reason="How did this happen?")
+                    return
 
                 try:
                     if "event" not in msg:
@@ -68,12 +73,6 @@ async def no_buzzer(request: Request) -> Template | Redirect:
 async def buzzer(request: Request, buzzer_id: str) -> Template | Redirect:
     print("got this!")
     user = request.query_params.get("user")
-    if user:
-        return Redirect(
-            f"/buzzer/{buzzer_id}", cookies=[Cookie(key="user", value=user)]
-        )
-
-    user = user or request.cookies.get("user")
 
     party = request.app.state.parties.get(buzzer_id)
 

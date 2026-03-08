@@ -59,10 +59,6 @@ async def no_buzzer(request: Request) -> Template | Redirect:
 @get("/{buzzer_id:str}")
 async def host(request: Request, buzzer_id: str) -> Template | Redirect:
     user = request.query_params.get("user")
-    if user:
-        return Redirect(f"/host/{buzzer_id}", cookies=[Cookie(key="user", value=user)])
-
-    user = user or request.cookies.get("user")
 
     party: Party = request.app.state.parties.get(buzzer_id)
 
@@ -74,9 +70,7 @@ async def host(request: Request, buzzer_id: str) -> Template | Redirect:
 
     if user != party.host:
         if user in party.users:
-            return Redirect(f"/buzzer/{buzzer_id}")
-
-        return Redirect("/buzzer", query_params={"error": "3"})
+            return Redirect(f"/buzzer/{buzzer_id}", query_params={"user": user})
 
     return Template(
         "host.html",

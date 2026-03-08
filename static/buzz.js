@@ -1,32 +1,90 @@
-const proto = location.protocol === "https:" ? "wss" : "ws";
-const buzzer_ws = new WebSocket(`${proto}://${location.host}/buzzer/ws`);
-
 const buzzer_button = document.getElementById("buzz");
 const message_box = document.getElementById("message");
+const audioToggle = document.getElementById("audio")
 
-buzzer_ws.onclose = (e) => {
-    if (e.code == 1000) {
-        window.location.replace('/buzzer?error=4')
-        // closed by the host
-    }
-    else if (e.code == 1013) {
-        message_box.innerHTML = `<p>You left.</p><a href='${location.href}'>Rejoin.</a> <a href="/">Go home.</a>`;
-        message_box.style.display = "inline-block";
-        updatebtn("DISCONNECT");
+var send = (event, data = {}) => { }
+var buzzer_state = "OPEN";
 
-    }
-    else {
-        message_box.innerHTML = `<p>${e.reason || "Lost Connection"}(${e.code})</p><br><a href='/buzzer'>Retry.</a>`;
-        message_box.style.display = "inline-block";
-        updatebtn("DISCONNECT");
+function connectWs() {
+
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const buzzer_ws = new WebSocket(`${proto}://${location.host}/buzzer/ws`);
+
+    send = (event, data = {}) => (buzzer_ws.send(JSON.stringify({ "event": event, ...data })))
+
+    buzzer_ws.onclose = (e) => {
+        if (e.code == 1000) {
+            window.location.replace('/buzzer?error=4')
+            // closed by the host
+        }
+        else if (e.code == 1013) {
+            message_box.innerHTML = `<p>${e.reason}</p><a href='${location.href}'>Rejoin.</a> <a href="/">Go home.</a>`;
+            message_box.style.display = "inline-block";
+            updateButtonStyle("DISCONNECT");
+
+        }
+        else if (e.code == 403) {
+            window.location.replace('/buzzer?error=1')
+        }
+        else {
+            console.log(e.code, "reconnecting...")
+            connectWs();
+        }
     }
 
+
+    buzzer_ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data)
+
+        switch (msg.event) {
+            case "UPDATE":
+                updateBuzzers(msg.users);
+                updateButtonStyle(msg.button_state);
+
+                if (msg.sound)
+                    buzzSound()
+
+                if (msg.choice) {
+                    console.log(msg.choice)
+                    console.log(typeof msg.choice)
+                    document.getElementById("selfChoice").innerText = `Your Choice: ${msg.choice}`
+                } else {
+                    document.getElementById("selfChoice").innerText = ""
+                }
+
+                if (!msg.choices) {
+                    document.getElementById("selfChoice").innerText = "";
+                    break;
+                }
+
+                if (msg.choice)
+                    break
+
+            case "MULTIPLE_CHOICE":
+                promptMultipleChoice(msg.choices)
+                break;
+
+            case "RESET":
+                updateBuzzers([]);
+                updateButtonStyle("OPEN")
+                break;
+
+            case "PING":
+                send("PONG", { "id": msg.id })
+                break;
+
+            case "END_MULTIPLE_CHOICE":
+                endMultipleChoice();
+                break;
+        }
+    }
 
 }
 
-const audioToggle = document.getElementById("audio")
 
-function buzz() {
+connectWs()
+
+function buzzSound() {
     if (audioToggle.checked) {
         const audio = new Audio("/static/buzz.wav")
         audio.volume = 0.2;
@@ -34,51 +92,9 @@ function buzz() {
     }
 }
 
-const send = (event, data = {}) => (buzzer_ws.send(JSON.stringify({ "event": event, ...data })))
-
-var buzzer_state = "OPEN";
-
-buzzer_ws.onmessage = (e) => {
-    const msg = JSON.parse(e.data)
-
-    console.log("WS Receive", msg)
-    switch (msg.event) {
-        case "UPDATE":
-            updateBuzzers(msg.users);
-            updatebtn(msg.button_state);
-            if (msg.sound)
-                buzz()
-            if (msg.choice) {
-                console.log(msg.choice)
-                console.log(typeof msg.choice)
-                document.getElementById("selfChoice").innerText = `Your Choice: ${msg.choice}`
-            } else {
-                document.getElementById("selfChoice").innerText = ""
-            }
-            if (!msg.choices) {
-                document.getElementById("selfChoice").innerText = "";
-                break;
-            }
-            if (msg.choice)
-                break
-        case "MULTIPLE_CHOICE":
-            promptMultipleChoice(msg.choices)
-            break;
-        case "RESET":
-            updateBuzzers([]);
-            updatebtn("OPEN")
-            break;
-        case "PING":
-            send("PONG", { "id": msg.id })
-            break;
-        case "END_MULTIPLE_CHOICE":
-            endMultipleChoice();
-            break;
-    }
-}
 
 function promptMultipleChoice(choices) {
-    updatebtn("LOCKED")
+    updateButtonStyle("LOCKED")
     const form = document.getElementById("multipleChoiceForm")
     form.innerHTML = ""
     for (const elem of choices) {
@@ -101,7 +117,7 @@ function endMultipleChoice() {
 
 }
 
-function updatebtn(newState) {
+function updateButtonStyle(newState) {
     if (newState)
         buzzer_state = newState;
 
@@ -181,6 +197,6 @@ document.addEventListener('click', async (e) => {
 buzzer_button.onclick = () => {
     if (buzzer_state == "OPEN") {
         send("BUZZ")
-        updatebtn("BUZZED")
+        updateButtonStyle("BUZZED")
     }
 }

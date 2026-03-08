@@ -10,7 +10,7 @@ host_ws.onclose = (e) => {
         // closed by the host
     }
     else {
-        message_box.innerHTML = `<p>${e.reason || "Lost Connection"}(${e.code})</p><br><a href='/buzzer'>Retry.</a>`;
+        message_box.innerHTML = `<p>${e.reason || "Lost Connection"}(${e.code})</p><br><a href='${location.href}'>Retry.</a>`;
         message_box.style.display = "inline-block";
     }
 

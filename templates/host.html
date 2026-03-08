@@ -2,32 +2,34 @@
 
 {% block headers %}
 <script src="/static/host.js" type="module"></script>
-
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 {% endblock %}
 
 {% block body %}
 
 <div id="message" class="warning"> </div>
 
+<p>Leo's janky buzzer</p>
+
 <div class="admin-buttons">
-    <button id="reset">Reset Buzzer</button>
-    <button id="toggle-lock">Toggle Lock</button>
+    <button id="reset" , class="bigButton">Reset Buzzer</button>
+    <button id="toggle-lock" class="bigButton">Toggle Lock</button>
     <br><span style="background-color: darkslategrey; padding: 2px;">Audio:<input id="audio" type="checkbox"
             checked></span>
 </div>
 
-<p style="margin: 10px;"><i>You can also press space to buzz.</i></p>
-<hr style="border-bottom: 0px;">
 <ol id="buzzed-users">
     <p>Loading...</p>
 </ol>
+<hr style="border-bottom: 0px;">
+<p>Multiple Choice Prompt:<br>Type one choice per line</p>
 
 <div>
     <form id="promptForm">
         <textarea form="promptForm" cols="30" id="prompts" name="prompts"></textarea><br>
-        <button id="clearChoices">clear</button>
         <input type="submit" value="submit">
-        <button id="earlyEndMC">End Choices</button>
+        <button id="clearChoices">Clear</button>
+        <button id="earlyEndMC">End Choosing</button>
     </form>
 </div>
 

@@ -10,6 +10,7 @@ import discord
 from litestar import WebSocket as BaseWebSocket, Litestar
 from litestar import status_codes
 from litestar.exceptions import WebSocketDisconnect, WebSocketException
+from litestar.status_codes import WS_1000_NORMAL_CLOSURE
 
 
 class CrossConnectionData:
@@ -67,6 +68,10 @@ class PlayerConnection(BaseWebSocket):
         old = self.sent_times.pop(token, None)
         if old:
             self.rtt = now - old
+
+    async def close(self, code: int = 1000, reason: str | None = None) -> None:
+        logging.info("Closing connection with code %s", code)
+        return await super().close(code, reason)
 
 
 class Party:
@@ -188,27 +193,33 @@ class Party:
 
     @asynccontextmanager
     async def connection(self, conn: PlayerConnection):
+        logging.info("New connection from %s", conn.game_data.user_id)
         conn.game_data.discord_user = self.users[conn.game_data.user_id]
         await conn.accept()
         task = None
 
         try:
             previous_conn = self.connections.pop(conn.game_data.user_id, None)
+            self.connections[conn.game_data.user_id] = conn
+            logging.info(
+                "Previous Connection: %s %s", previous_conn, conn.game_data.user_id
+            )
             if previous_conn:
-                asyncio.create_task(
-                    previous_conn.close(
+                try:
+                    await previous_conn.close(
                         code=status_codes.WS_1013_TRY_AGAIN_LATER,
                         reason="Connected from another location.",
                     )
-                )
-                conn.game_data = previous_conn.game_data
+                except Exception:
+                    logging.error("Failed to close old connection.")
 
-            self.connections[conn.game_data.user_id] = conn
+                conn.game_data = previous_conn.game_data
 
             # Restrore previous state
             old_connection = self.lost_connections.pop(conn.game_data.user_id, None)
             if old_connection:
                 conn.game_data = old_connection.game_data
+                conn.game_data.leaving = False
 
             payload = self.base_user_update_payload()
             if not self.locked:
